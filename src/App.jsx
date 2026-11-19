@@ -1,11 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownToLine,
   ArrowRight,
   CalendarDays,
   Check,
   CheckCircle2,
-  ChevronDown,
   CircleAlert,
   Clock3,
   CloudUpload,
@@ -15,7 +14,6 @@ import {
   Home,
   Languages,
   Leaf,
-  Link2,
   MapPin,
   MessageCircle,
   Plus,
@@ -34,15 +32,8 @@ import {
   getScheduleHealth,
   intersectSlots,
   parseCsv,
-  parseSheetJson,
   serializeCsv,
 } from './matching.js'
-
-const initialGroups = buildStudentGroups(SAMPLE_STUDENTS)
-const initialAssignments = Object.fromEntries([
-  [SAMPLE_HOSTS[0].id, [initialGroups.find((group) => group.members.some((member) => member.id === 'student-yuki'))?.id]],
-  [SAMPLE_HOSTS[2].id, [initialGroups.find((group) => group.members.some((member) => member.id === 'student-sara'))?.id]],
-].map(([hostId, groupIds]) => [hostId, groupIds.filter(Boolean)]))
 
 const avatarColors = ['avatar-sage', 'avatar-sun', 'avatar-rose', 'avatar-lilac', 'avatar-blue']
 
@@ -106,18 +97,30 @@ function InfoTile({ icon: Icon, label, value, className = '' }) {
 function App() {
   const [hosts, setHosts] = useState(SAMPLE_HOSTS)
   const [students, setStudents] = useState(SAMPLE_STUDENTS)
-  const [assignments, setAssignments] = useState(initialAssignments)
+  const [assignments, setAssignments] = useState({})
   const [query, setQuery] = useState('')
   const [hostQuery, setHostQuery] = useState('')
   const [toast, setToast] = useState(null)
-  const [sheetsOpen, setSheetsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
-  const [sheetUrls, setSheetUrls] = useState({ hosts: '', students: '' })
+  const [sheetUrl, setSheetUrl] = useState('')
   const [syncUrl, setSyncUrl] = useState('')
-  const [busy, setBusy] = useState('')
+  const [loadingSheet, setLoadingSheet] = useState(false)
   const hostFileRef = useRef(null)
   const studentFileRef = useRef(null)
+  const restoredSheetRef = useRef(false)
   const groups = useMemo(() => buildStudentGroups(students), [students])
+
+  useEffect(() => {
+    if (restoredSheetRef.current) return
+    restoredSheetRef.current = true
+    try {
+      const savedUrl = window.localStorage.getItem('gatherwell.sheetUrl') ?? ''
+      setSheetUrl(savedUrl)
+      if (savedUrl) loadGoogleSheetUrl(savedUrl)
+    } catch {
+      showToast('Browser storage is unavailable; the sheet URL will not be remembered.', 'error')
+    }
+  }, [])
 
   const getAssignedGroups = (hostId, currentAssignments = assignments) => (
     (currentAssignments[hostId] ?? []).map((id) => groups.find((group) => group.id === id)).filter(Boolean)
@@ -186,30 +189,59 @@ function App() {
     }
   }
 
-  async function loadSheet(kind) {
-    const url = sheetUrls[kind].trim()
-    if (!url) {
-      showToast(`Add the ${kind} sheet endpoint first.`, 'error')
+  async function loadGoogleSheetUrl(url) {
+    const enteredUrl = url.trim()
+    const sheetId = enteredUrl.match(/^https?:\/\/docs\.google\.com\/spreadsheets\/(?:u\/\d+\/)?d\/([a-z0-9_-]+)/i)?.[1]
+    if (!sheetId) {
+      showToast('Paste a valid Google Sheets URL containing /spreadsheets/d/<sheet-id>.', 'error')
       return
     }
-    setBusy(kind)
+    setLoadingSheet(true)
     try {
-      const response = await fetch(url)
-      if (!response.ok) throw new Error(`Sheet request failed (${response.status} ${response.statusText}).`)
-      const records = parseSheetJson(await response.json(), kind)
-      if (kind === 'hosts') {
-        setHosts(records)
-        setAssignments({})
-      } else {
-        setStudents(records)
-        setAssignments({})
+      const tabs = [
+        ['hosts', 'Family - Responses'],
+        ['students', 'Students - Responses'],
+      ]
+      const loaded = await Promise.all(tabs.map(async ([kind, tab]) => {
+        const endpoint = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`
+        const controller = new AbortController()
+        const timeout = window.setTimeout(() => controller.abort(), 15_000)
+        try {
+          const response = await fetch(endpoint, { signal: controller.signal })
+          if (!response.ok) throw new Error(`${tab} request returned ${response.status}.`)
+          const csv = await response.text()
+          if (/^\s*</.test(csv)) throw new Error(`${tab} did not return CSV data.`)
+          return [kind, parseCsv(csv, kind)]
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new Error(`${tab} request timed out after 15 seconds.`)
+          }
+          throw error
+        } finally {
+          window.clearTimeout(timeout)
+        }
+      }))
+      const records = Object.fromEntries(loaded)
+      setHosts(records.hosts)
+      setStudents(records.students)
+      setAssignments({})
+      try {
+        window.localStorage.setItem('gatherwell.sheetUrl', enteredUrl)
+        showToast(`Loaded ${records.hosts.length} hosts and ${records.students.length} students from Google Sheets.`)
+      } catch {
+        showToast('Sheet data loaded, but browser storage is unavailable so the URL could not be remembered.', 'error')
       }
-      showToast(`Loaded ${records.length} ${kind === 'hosts' ? 'host families' : 'students'} from Sheets.`)
     } catch (error) {
-      showToast(error.message || 'Could not load this sheet endpoint.', 'error')
+      const details = error instanceof Error ? ` ${error.message}` : ''
+      showToast(`Could not load the sheet. Check that sharing is set to “Anyone with the link can view”, both tab names match, and the sheet is reachable.${details}`, 'error')
     } finally {
-      setBusy('')
+      setLoadingSheet(false)
     }
+  }
+
+  function handleSheetSubmit(event) {
+    event.preventDefault()
+    loadGoogleSheetUrl(sheetUrl)
   }
 
   async function confirmExport() {
@@ -244,7 +276,7 @@ function App() {
 
   function hostSoftNotes(host, group) {
     const notes = []
-    const restrictions = group.members.map((member) => member.dietary).filter((diet) => diet && !/no restrictions|none|n\/a/i.test(diet))
+    const restrictions = group.members.map((member) => member.dietary).filter((diet) => diet && !/no restrictions|none|n\/a|not provided|prefer not to say/i.test(diet))
     if (restrictions.length) notes.push(`Dietary: ${[...new Set(restrictions)].join(', ')}`)
     const preferred = [...new Set(group.members.map((member) => member.language).filter(Boolean))]
     const shared = preferred.filter((language) => host.languages.some((spoken) => spoken.toLowerCase() === language.toLowerCase()))
@@ -262,20 +294,12 @@ function App() {
           <span className="brand-program">Christmas dinners</span>
         </a>
         <div className="topbar-right">
-          <button className="text-button" onClick={() => setSheetsOpen((open) => !open)}><Link2 size={15} /> Connect a sheet <ChevronDown size={14} /></button>
-          <button className="button button-dark" onClick={() => setExportOpen(true)}><ArrowDownToLine size={16} /> Confirm &amp; export CSV</button>
-          {sheetsOpen && (
-            <div className="sheets-popover">
-              <div className="popover-heading"><div><strong>Connect Google Sheets</strong><span>Paste a published JSON endpoint</span></div><button className="icon-button" onClick={() => setSheetsOpen(false)} aria-label="Close"><X size={16} /></button></div>
-              {['hosts', 'students'].map((kind) => (
-                <div className="sheet-connect-row" key={kind}>
-                  <label htmlFor={`${kind}-sheet-url`}>{kind === 'hosts' ? 'Host families' : 'Students'}</label>
-                  <div className="sheet-input-row"><input id={`${kind}-sheet-url`} value={sheetUrls[kind]} onChange={(event) => setSheetUrls((current) => ({ ...current, [kind]: event.target.value }))} placeholder="https://.../exec" /><button className="button button-small button-outline" disabled={busy === kind} onClick={() => loadSheet(kind)}>{busy === kind ? 'Loading…' : 'Load'}</button></div>
-                </div>
-              ))}
-              <p className="popover-hint">Endpoint should return JSON rows with headers such as Name, Availability, and Capacity.</p>
-            </div>
-          )}
+          <form className="sheet-loader" onSubmit={handleSheetSubmit}>
+            <label className="sr-only" htmlFor="sheet-url">Load from Google Sheet URL</label>
+            <input id="sheet-url" type="url" value={sheetUrl} onChange={(event) => setSheetUrl(event.target.value)} placeholder="Load from Google Sheet URL" autoComplete="url" disabled={loadingSheet} />
+            <button className="button button-dark" type="submit" disabled={loadingSheet}>{loadingSheet ? 'Loading…' : 'Load Sheet'}</button>
+          </form>
+          <button className="button button-dark" onClick={() => setExportOpen(true)} disabled={loadingSheet}><ArrowDownToLine size={16} /> Confirm &amp; export CSV</button>
         </div>
       </header>
 
@@ -294,27 +318,27 @@ function App() {
         </section>
 
         <section className="summary-bar">
-          <div className="summary-item"><span className="summary-icon"><Home size={17} /></span><span><strong>{hosts.length}</strong><small>host families</small></span></div>
+          <div className="summary-item"><span className="summary-icon"><Home size={17} /></span><span><strong>{hosts.length}</strong><small>{hosts.length === 1 ? 'host family' : 'host families'}</small></span></div>
           <span className="summary-separator" />
-          <div className="summary-item"><span className="summary-icon students-icon"><Users size={17} /></span><span><strong>{students.length}</strong><small>students signed up</small></span></div>
+          <div className="summary-item"><span className="summary-icon students-icon"><Users size={17} /></span><span><strong>{students.length}</strong><small>{students.length === 1 ? 'student signed up' : 'students signed up'}</small></span></div>
           <span className="summary-separator" />
-          <div className="summary-item"><span className="summary-icon matches-icon"><Heart size={16} /></span><span><strong>{assignedCount} <em>groups</em></strong><small>{assignedStudentsCount} students matched</small></span></div>
+          <div className="summary-item"><span className="summary-icon matches-icon"><Heart size={16} /></span><span><strong>{assignedCount} <em>{assignedCount === 1 ? 'group' : 'groups'}</em></strong><small>{assignedStudentsCount} {assignedStudentsCount === 1 ? 'student' : 'students'} matched</small></span></div>
           <div className="summary-spacer" />
-          <button className="upload-button" onClick={() => hostFileRef.current?.click()}><CloudUpload size={15} /> Upload hosts CSV</button>
-          <button className="upload-button" onClick={() => studentFileRef.current?.click()}><CloudUpload size={15} /> Upload students CSV</button>
+          <button className="upload-button" onClick={() => hostFileRef.current?.click()} disabled={loadingSheet}><CloudUpload size={15} /> Upload hosts CSV</button>
+          <button className="upload-button" onClick={() => studentFileRef.current?.click()} disabled={loadingSheet}><CloudUpload size={15} /> Upload students CSV</button>
           <input ref={hostFileRef} type="file" accept=".csv,text/csv" className="hidden-input" onChange={(event) => importFile(event, 'hosts')} />
           <input ref={studentFileRef} type="file" accept=".csv,text/csv" className="hidden-input" onChange={(event) => importFile(event, 'students')} />
         </section>
 
         <section className="workspace-heading">
           <div><h2>Find the right fit</h2><p>Smart matches consider shared availability, group requests, and capacity.</p></div>
-          <div className="matching-note"><Sparkles size={14} /> Friends stay together · {groups.length} student groups</div>
+          <div className="matching-note"><Sparkles size={14} /> Friends stay together · {groups.length} student {groups.length === 1 ? 'group' : 'groups'}</div>
         </section>
 
         <section className="matching-workspace">
           <div className="pane host-pane">
             <div className="pane-header">
-              <div className="pane-title"><span className="pane-icon host-pane-icon"><Home size={17} /></span><div><h3>Host families</h3><span>{hosts.length} welcoming tables</span></div></div>
+              <div className="pane-title"><span className="pane-icon host-pane-icon"><Home size={17} /></span><div><h3>Host families</h3><span>{hosts.length} {hosts.length === 1 ? 'welcoming table' : 'welcoming tables'}</span></div></div>
               <label className="search-field host-search"><Search size={15} /><input value={hostQuery} onChange={(event) => setHostQuery(event.target.value)} placeholder="Find a host" aria-label="Search hosts" /></label>
             </div>
             <div className="pane-scroll host-scroll">
@@ -349,7 +373,7 @@ function App() {
                         {hostGroups.map((group) => (
                           <div className="assigned-group" key={group.id}>
                             <div className="assigned-avatars">{group.members.map((member, index) => <StudentAvatar key={member.id} student={member} index={index} size="small" />)}</div>
-                            <div className="assigned-name"><strong>{group.members.map((member) => member.name.split(' ')[0]).join(' & ')}</strong><span>{group.members.length} {group.members.length === 1 ? 'student' : 'students'} together</span></div>
+                            <div className="assigned-name"><strong>{group.members.map((member) => member.name).join(' & ')}</strong><span>{group.members.length} {group.members.length === 1 ? 'student' : 'students'} together</span></div>
                             <button className="unassign-button" aria-label={`Unassign ${group.members.map((member) => member.name).join(' and ')}`} onClick={() => unassignGroup(host.id, group.id)}><X size={15} /></button>
                           </div>
                         ))}
@@ -370,7 +394,7 @@ function App() {
 
           <div className="pane student-pane">
             <div className="pane-header student-pane-header">
-              <div className="pane-title"><span className="pane-icon student-pane-icon"><Users size={17} /></span><div><h3>Student groups</h3><span>{groups.length} groups · {students.length} students</span></div></div>
+              <div className="pane-title"><span className="pane-icon student-pane-icon"><Users size={17} /></span><div><h3>Student groups</h3><span>{groups.length} {groups.length === 1 ? 'group' : 'groups'} · {students.length} {students.length === 1 ? 'student' : 'students'}</span></div></div>
               <label className="search-field"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students" aria-label="Search student groups" /></label>
             </div>
             <div className="pane-scroll student-scroll">
@@ -379,7 +403,7 @@ function App() {
                 const availableHosts = hosts.map((host) => ({ host, overlap: overlapsForGroup(host, group) }))
                   .filter(({ host, overlap }) => hostCanTakeGroup(host, group) && overlap.length)
                   .sort((left, right) => right.overlap.length - left.overlap.length)
-                const groupName = group.members.map((member) => member.name.split(' ')[0]).join(' + ')
+                const groupName = group.members.map((member) => member.name).join(' + ')
                 return (
                   <article
                     className={`student-card ${assignedHost ? 'student-card-assigned' : ''}`}
@@ -412,7 +436,7 @@ function App() {
                         : <span className="no-slots">No shared meal times — check individual availability</span>}</div>
                     </div>
                     <div className="recommendations">
-                      <div className="recommendation-title"><span><Sparkles size={13} /> BEST-FIT HOSTS</span><span>{assignedHost ? `Matched with ${assignedHost.name.split(' ')[0]}` : 'Sorted by shared times'}</span></div>
+                      <div className="recommendation-title"><span><Sparkles size={13} /> BEST-FIT HOSTS</span><span>{assignedHost ? 'Already matched' : 'Sorted by shared times'}</span></div>
                       {availableHosts.length > 0 ? <div className="recommendation-list">{availableHosts.slice(0, 3).map(({ host, overlap }) => (
                         <div className="recommendation-row" key={host.id}>
                           <div className="recommendation-host"><span className="mini-home"><Home size={13} /></span><div><strong>{host.name}</strong><span>{host.district} · {overlap.length} shared {overlap.length === 1 ? 'slot' : 'slots'}</span></div></div>

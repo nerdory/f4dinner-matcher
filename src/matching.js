@@ -97,49 +97,118 @@ export function getScheduleHealth(overlapCount) {
 
 function normalizeAvailability(value) {
   return asList(value).flatMap((entry) => {
-    const match = entry.match(/(?:dec(?:ember)?\s*)?(\d{1,2})\s*[-,· ]\s*(lunch|dinner)/i)
-    if (!match) return []
-    const day = Number(match[1])
-    if (!PROGRAM_DAYS.some((item) => item.day === day)) return []
-    return [`${day}-${match[2][0].toUpperCase()}${match[2].slice(1).toLowerCase()}`]
+    const day = dateHeaderDay(entry)
+    return day ? slotsForDay(day, entry) : []
   })
 }
 
+function dateHeaderDay(value) {
+  const match = clean(value).match(/(?:dec(?:ember)?\s*(\d{1,2})|(\d{1,2})\s*dec(?:ember)?)/i)
+  const day = Number(match?.[1] ?? match?.[2])
+  return PROGRAM_DAYS.some((item) => item.day === day) ? day : null
+}
+
+function slotsForDay(day, value) {
+  const text = clean(value).toLocaleLowerCase()
+  if (!text || /\b(no|not|unavailable|false|none|n\/a)\b/.test(text)) return []
+  const lunch = /\blunch(?:time)?\b/.test(text) || /^l$/.test(text)
+  const dinner = /\bdinner\b/.test(text) || /^d$/.test(text)
+  const both = /\b(yes|y|true|1|available|both|all day|all meals)\b/.test(text)
+  return [
+    ...(lunch || both ? [`${day}-Lunch`] : []),
+    ...(dinner || both ? [`${day}-Dinner`] : []),
+  ]
+}
+
+function availabilityFromRow(row) {
+  const listedSlots = normalizeAvailability(rowValue(row, ['availability', 'available slots', 'slots']))
+  const datedSlots = Object.entries(row).flatMap(([header, value]) => {
+    const day = dateHeaderDay(header)
+    return day ? slotsForDay(day, value) : []
+  })
+  return [...new Set([...listedSlots, ...datedSlots])]
+}
+
 function rowValue(row, aliases) {
-  const entries = Object.entries(row)
+  const entries = Object.entries(row).map(([header, value]) => [key(header), value])
   for (const alias of aliases) {
-    const found = entries.find(([header]) => key(header) === key(alias))
+    const aliasKey = key(alias)
+    const found = entries.find(([header]) => header === aliasKey)
     if (found && found[1] !== undefined && found[1] !== '') return found[1]
+  }
+  const exactOnly = new Set(['name', 'student', 'host', 'family'])
+  const partialAliases = aliases.map(key).filter((alias) => alias.length >= 4 && !exactOnly.has(alias)).sort((a, b) => b.length - a.length)
+  for (const alias of partialAliases) {
+    const found = entries.find(([header, value]) => header.includes(alias) && value !== undefined && value !== '')
+    if (found) return found[1]
   }
   return ''
 }
 
+function prefersMandarin(value) {
+  const preference = clean(value)
+  if (/\b(no|false|0|not|never)\b/i.test(preference)) return false
+  return /mandarin/i.test(preference) || /\b(yes|true|1|preferred)\b/i.test(preference)
+}
+
+function languagePreference(value) {
+  const preference = clean(value)
+  if (!preference || /\b(no|false|0|none|n\/a|not interested)\b/i.test(preference)) return ''
+  return prefersMandarin(preference) ? 'Mandarin' : preference
+}
+
 function toHost(row, index) {
-  const name = clean(rowValue(row, ['name', 'host name', 'family', 'host']))
+  const name = clean(rowValue(row, ['name', 'host name', 'family name']))
+  const languages = asList(rowValue(row, ['languages', 'languages spoken']))
+  const mandarinPreference = rowValue(row, ['mandarin preference', 'mandarin'])
+  if (prefersMandarin(mandarinPreference) && !languages.some((language) => /mandarin/i.test(language))) languages.push('Mandarin')
+  const capacityText = clean(rowValue(row, [
+    'capacity',
+    'max spots',
+    'spots',
+    'how many students would you like to host',
+    'number of students to host',
+  ]))
   return {
     id: `host-import-${Date.now()}-${index}`,
     name,
-    district: clean(rowValue(row, ['district', 'neighborhood', 'area'])) || 'Not specified',
-    venue: /restaurant/i.test(clean(rowValue(row, ['venue', 'location type']))) ? 'Restaurant' : 'Home',
-    languages: asList(rowValue(row, ['languages', 'languages spoken', 'language'])),
+    phone: clean(rowValue(row, ['phone', 'telephone', 'mobile'])),
+    email: clean(rowValue(row, ['email', 'e-mail'])),
+    district: clean(rowValue(row, ['district', 'neighborhood', 'area', 'home restaurant of choice'])) || 'Not specified',
+    venue: /restaurant/i.test(clean(rowValue(row, ['venue', 'location type', 'where will you host']))) ? 'Restaurant' : 'Home',
+    languages,
     remarks: clean(rowValue(row, ['remarks', 'notes', 'comments'])),
-    capacity: Math.max(0, Number(rowValue(row, ['capacity', 'max spots', 'spots'])) || 0),
-    availability: normalizeAvailability(rowValue(row, ['availability', 'available slots', 'slots'])),
+    capacity: Math.max(0, Number(capacityText.match(/\d+/)?.[0]) || 0),
+    availability: availabilityFromRow(row),
   }
 }
 
 function toStudent(row, index) {
-  const name = clean(rowValue(row, ['name', 'student name', 'full name', 'student']))
+  const firstName = clean(rowValue(row, ['first name']))
+  const lastName = clean(rowValue(row, ['last name']))
+  const name = clean(rowValue(row, ['name', 'student name', 'full name', 'student'])) || [firstName, lastName].filter(Boolean).join(' ')
   return {
     id: `student-import-${Date.now()}-${index}`,
     name,
+    gender: clean(rowValue(row, ['gender'])),
+    whatsapp: clean(rowValue(row, ['whatsapp', 'whats app', 'phone'])),
     university: clean(rowValue(row, ['university', 'affiliation', 'school'])),
     religion: clean(rowValue(row, ['religion', 'faith'])),
-    country: clean(rowValue(row, ['country', 'nationality'])),
+    country: clean(rowValue(row, ['country', 'home country', 'nationality'])),
     dietary: clean(rowValue(row, ['dietary', 'dietary restrictions', 'diet', 'food restrictions'])),
-    language: clean(rowValue(row, ['language', 'language preference', 'preferred language'])),
-    requests: clean(rowValue(row, ['requests', 'pair with', 'friends', 'requested friends', 'friend requests'])),
-    availability: normalizeAvailability(rowValue(row, ['availability', 'available slots', 'slots'])),
+    language: languagePreference(rowValue(row, ['language', 'language preference', 'preferred language', 'mandarin preference', 'mandarin'])),
+    requests: clean(rowValue(row, [
+      'requests',
+      'pair with',
+      'friends',
+      'requested friends',
+      'friend requests',
+      'specific students to be grouped with',
+      'specific students',
+      'students to be grouped',
+      'group with',
+    ])),
+    availability: availabilityFromRow(row),
   }
 }
 
@@ -149,28 +218,6 @@ export function parseCsv(text, kind) {
   const convert = kind === 'hosts' ? toHost : toStudent
   const records = parsed.data.map(convert).filter((record) => record.name)
   if (!records.length) throw new Error(`No ${kind === 'hosts' ? 'host' : 'student'} rows found. Check the CSV headers and data.`)
-  return records
-}
-
-export function parseSheetJson(payload, kind) {
-  let rows = payload
-  if (payload && !Array.isArray(payload)) {
-    rows = payload.values ?? payload.data ?? payload.rows
-    if (!rows && payload.table?.rows) {
-      const columns = payload.table.cols.map((column) => column.label || column.id)
-      rows = payload.table.rows.map((row) => Object.fromEntries(
-        columns.map((column, index) => [column, row.c?.[index]?.v ?? '']),
-      ))
-    }
-  }
-  if (!Array.isArray(rows) || !rows.length) throw new Error('The endpoint did not return a non-empty array of rows.')
-  if (Array.isArray(rows[0])) {
-    const [headers, ...data] = rows
-    rows = data.map((row) => Object.fromEntries(headers.map((header, index) => [clean(header), row[index] ?? ''])))
-  }
-  const convert = kind === 'hosts' ? toHost : toStudent
-  const records = rows.map((row, index) => convert(row, index)).filter((record) => record.name)
-  if (!records.length) throw new Error(`No ${kind === 'hosts' ? 'host' : 'student'} rows found in the endpoint response.`)
   return records
 }
 

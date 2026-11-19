@@ -16,38 +16,52 @@ npm run dev
 
 Create a production build with `npm run build`, or preview that build with `npm run preview`.
 
-## Import data
+## Load data
 
-The app starts with sample hosts and students. Use **Upload hosts CSV** or **Upload students CSV** to replace either sample dataset. CSV headers are flexible; these are the supported fields:
+The app starts with generic placeholder records only. Paste a Google Sheets URL into **Load from Google Sheet URL** in the top bar and select **Load Sheet**. The app reads the `Family - Responses` and `Students - Responses` tabs directly in your browser using Google Visualization CSV endpoints. After a successful load, the URL is remembered in your browser's local storage and automatically reloaded the next time you open the app; the URL and data are not saved in this repository or sent to an app backend.
+
+Set the sheet's general access to **Anyone with the link can view**. Both tabs must be present. Loading is all-or-nothing: if either tab fails, the current data and assignments remain unchanged. The browser must be able to fetch the Google endpoint (CORS).
+
+### Expected sheet columns
+
+Hosts: `Name`, `Phone no.`, `Email Address`, `How many students would you like to host?`, the host venue and area questions, date availability columns from `13 Dec` through `27 Dec`, the Mandarin-hosting preference question, and the organizer remarks question.
+
+Students: `First Name`, `Last Name`, `Home Country`, `Gender`, `Whatsapp number`, `University`, the faith and dietary questions, date availability columns from `Dec 13` through `Dec 27`, the student grouping question, and the Mandarin-host preference question.
+
+Header matching ignores capitalization and punctuation, recognizes common synonyms, and can match key terms inside longer form questions so wording does not need to be an exact copy. Daily date columns can include a longer question around a bracketed date, such as `[13 Dec]` or `[Dec 13]`. Availability cells can contain `Lunch`, `Dinner`, or both. `Yes`, `Available`, and `Both` are treated as both meals; empty or negative values are unavailable. Friend requests can contain partial names and are matched in either name order.
+
+If you prefer local files, use **Upload hosts CSV** or **Upload students CSV**. CSV parsing supports quoted commas and newlines. The CSV headers can use the sheet field names above, or these common aliases:
 
 ### Hosts
 
 | Field | Example |
 | --- | --- |
-| Name | Amelia & James Chen |
-| District | North Park |
+| Name | Sample Host A |
+| Area / District | Sample District |
 | Venue | Home or Restaurant |
-| Languages | English; Mandarin |
-| Remarks | Vegetarian-friendly |
+| Phone | (loaded from your sheet) |
+| Email | (loaded from your sheet) |
+| Mandarin preference | Yes or No |
+| Remarks | Placeholder host |
 | Capacity | 4 |
-| Availability | Dec 13 Lunch; Dec 14 Dinner |
+| 13 Dec through 27 Dec | Lunch, Dinner, Both, or blank |
 
 ### Students
 
 | Field | Example |
 | --- | --- |
-| Name | Yuki Tanaka |
-| University / Affiliation | Northbridge University |
-| Religion / Faith | Buddhist |
-| Country | Japan |
-| Dietary / Dietary restrictions | No restrictions |
-| Language / Language preference | English |
-| Requests / Pair with / Friends | Min-jun Park |
-| Availability | Dec 14 Dinner; Dec 16 Lunch |
+| First Name | Student |
+| Last Name | 1 |
+| University | Sample University |
+| Faith | Not provided |
+| Country | Country A |
+| Gender | (loaded from your sheet) |
+| WhatsApp | (loaded from your sheet) |
+| Dietary restrictions | Not provided |
+| Specific students to be grouped with | Student 2 |
+| Dec 13 through Dec 27 | Lunch, Dinner, Both, or blank |
 
-Separate multiple values with semicolons. Availability entries should name a program date from December 13–27 and a meal (`Lunch` or `Dinner`).
-
-Use **Connect a sheet** to load host and student JSON endpoints. Endpoints can return arrays of objects, arrays with a header row followed by data rows, or an object containing `values`, `data`, or `rows`. The browser must be allowed to fetch the endpoint (CORS). Importing a new dataset replaces that dataset and clears current assignments.
+Separate multiple values with semicolons. Loading a sheet replaces both datasets; each CSV upload replaces its corresponding dataset. Replacing data clears current assignments.
 
 ## Matching and export
 

@@ -32,9 +32,12 @@ button:disabled { cursor: default; }
 .brand-name > span { color: #d88759; }
 .brand-divider { height: 19px; border-left: 1px solid #e4e3dc; margin: 0 4px 0 8px; }
 .brand-program { color: #717970; font-size: 12px; font-weight: 600; }
-.topbar-right { display: flex; align-items: center; gap: 19px; position: relative; }
-.text-button { display: flex; align-items: center; gap: 7px; color: #5d675f; background: none; border: 0; padding: 8px 0; font-size: 12px; font-weight: 600; }
-.text-button:hover { color: #1c5b45; }
+.topbar-right { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.sheet-loader { width: min(410px, 40vw); min-width: 220px; height: 38px; padding: 4px; display: flex; align-items: center; gap: 5px; background: #fafaf7; border: 1px solid #e8e9e2; border-radius: 7px; }
+.sheet-loader:focus-within { border-color: #b7c9b8; background: #fff; }
+.sheet-loader input { flex: 1; min-width: 0; padding: 0 6px; border: 0; outline: 0; color: #48534a; background: transparent; font-size: 10px; }
+.sheet-loader input::placeholder { color: #989f96; }
+.sheet-loader .button { height: 28px; padding: 0 10px; border-radius: 5px; font-size: 9px; white-space: nowrap; }
 .button { border: 0; border-radius: 8px; padding: 11px 15px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: background .16s ease, transform .16s ease; }
 .button-dark { color: white; background: #215e49; box-shadow: 0 2px 3px #164c3930; }
 .button-dark:hover { background: #184a38; transform: translateY(-1px); }
@@ -131,7 +134,7 @@ h1 { margin: 8px 0 5px; font: 500 32px/1.2 'Manrope', sans-serif; letter-spacing
 .avatar-lilac { color: #6c6285; background: #e8e1f1; }
 .avatar-blue { color: #4d7180; background: #dcebf0; }
 .assigned-name { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 1px; }
-.assigned-name strong { color: #39443c; font-size: 9px; }
+.assigned-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #39443c; font-size: 9px; }
 .assigned-name span { color: #92988f; font-size: 8px; }
 .unassign-button, .icon-button { display: grid; place-items: center; border: 0; color: #979d95; background: transparent; }
 .unassign-button { width: 24px; height: 24px; border-radius: 5px; }
@@ -214,19 +217,10 @@ h1 { margin: 8px 0 5px; font: 500 32px/1.2 'Manrope', sans-serif; letter-spacing
 .page-footer { height: 42px; display: flex; align-items: center; justify-content: space-between; color: #a3a89f; font-size: 8px; letter-spacing: .5px; }
 .page-footer span:first-child { display: flex; align-items: center; gap: 5px; font-size: 9px; letter-spacing: 0; }
 .page-footer svg { color: #bf8062; }
-.sheets-popover { position: absolute; top: 42px; right: 165px; z-index: 5; width: 330px; padding: 14px; background: white; border: 1px solid #e7e8e0; border-radius: 9px; box-shadow: 0 12px 35px #24372c20; }
-.popover-heading { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-.popover-heading > div { display: flex; flex-direction: column; gap: 3px; }
-.popover-heading strong { color: #354139; font: 700 12px 'Manrope', sans-serif; }
-.popover-heading > div > span { color: #8b9289; font-size: 9px; }
 .icon-button { width: 27px; height: 27px; border-radius: 5px; }
 .icon-button:hover { color: #405447; background: #f2f4ef; }
-.sheet-connect-row + .sheet-connect-row { margin-top: 10px; }
-.sheet-connect-row > label { display: block; margin-bottom: 4px; color: #69756b; font-size: 9px; font-weight: 700; }
-.sheet-input-row { display: flex; gap: 6px; }
-.sheet-input-row input, .sync-input { min-width: 0; flex: 1; padding: 8px 9px; border: 1px solid #e6e8e1; border-radius: 5px; outline: 0; color: #455148; background: #fdfdfb; font-size: 9px; }
-.sheet-input-row input:focus, .sync-input:focus { border-color: #a8c0aa; }
-.popover-hint { margin: 11px 0 0; color: #9a9f97; font-size: 8px; line-height: 1.5; }
+.sync-input { min-width: 0; flex: 1; padding: 8px 9px; border: 1px solid #e6e8e1; border-radius: 5px; outline: 0; color: #455148; background: #fdfdfb; font-size: 9px; }
+.sync-input:focus { border-color: #a8c0aa; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 10; padding: 18px; display: grid; place-items: center; background: #17231dcc; backdrop-filter: blur(3px); }
 .export-modal { position: relative; width: min(465px, 100%); padding: 25px; background: #fff; border-radius: 14px; box-shadow: 0 20px 70px #14271d42; }
 .modal-close { position: absolute; top: 12px; right: 12px; }
@@ -260,6 +254,7 @@ h1 { margin: 8px 0 5px; font: 500 32px/1.2 'Manrope', sans-serif; letter-spacing
 @media (max-width: 1050px) {
   main { padding: 0 3%; }
   .topbar { padding: 0 3%; }
+  .sheet-loader { width: min(360px, 36vw); min-width: 190px; }
   .matching-workspace { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 10px; }
   .summary-bar { gap: 11px; padding: 0 10px; }
   .upload-button { padding: 7px; font-size: 9px; }
@@ -269,12 +264,12 @@ h1 { margin: 8px 0 5px; font: 500 32px/1.2 'Manrope', sans-serif; letter-spacing
 }
 @media (max-width: 760px) {
   body { min-width: 360px; }
-  .topbar { height: 58px; padding: 0 16px; }
+  .topbar { height: auto; min-height: 58px; padding: 10px 16px; flex-wrap: wrap; gap: 9px; }
   .brand-program, .brand-divider { display: none; }
-  .topbar-right { gap: 10px; }
-  .text-button { font-size: 0; gap: 3px; }
-  .text-button svg { font-size: initial; }
+  .topbar-right { flex: 0 0 100%; gap: 8px; }
+  .sheet-loader { flex: 1; width: auto; min-width: 0; }
   .topbar-right .button { padding: 9px 10px; font-size: 10px; }
+  .sheet-loader .button { padding: 0 10px; font-size: 9px; }
   main { padding: 0 14px; }
   .welcome-row { padding: 24px 0 15px; align-items: flex-start; flex-direction: column; gap: 14px; }
   h1 { font-size: 28px; }
@@ -294,13 +289,12 @@ h1 { margin: 8px 0 5px; font: 500 32px/1.2 'Manrope', sans-serif; letter-spacing
   .student-pane-header { padding-right: 9px; }
   .student-pane-header .search-field { width: 115px; }
   .page-footer { height: 38px; }
-  .sheets-popover { right: 0; width: min(330px, calc(100vw - 25px)); }
 }
 @media (max-width: 420px) {
   .brand-name { font-size: 18px; }
   .topbar-right { gap: 6px; }
-  .text-button { gap: 1px; }
   .topbar-right .button { gap: 5px; padding: 8px; font-size: 9px; }
+  .sheet-loader .button { padding: 0 8px; }
   .program-live { right: 8px; font-size: 6px; }
   .pane-header { gap: 5px; }
   .pane-title { gap: 6px; }
