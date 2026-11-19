@@ -16,6 +16,10 @@ npm run dev
 
 Create a production build with `npm run build`, or preview that build with `npm run preview`.
 
+## Form templates
+
+The Google Drive folder containing the form templates is available [here](https://drive.google.com/drive/folders/1AMQlNopMFhh1NNWuiwnHTpLKGHQBohI1?usp=sharing). For the app to load responses, the connected spreadsheet should include tabs named `Family - Responses` and `Students - Responses`.
+
 ## Load data
 
 The app starts with generic placeholder records only. Paste a Google Sheets URL into **Load from Google Sheet URL** in the top bar and select **Load Sheet**. The app reads the `Family - Responses` and `Students - Responses` tabs directly in your browser using Google Visualization CSV endpoints. After a successful load, the URL is remembered in your browser's local storage and automatically reloaded the next time you open the app; the URL and data are not saved in this repository or sent to an app backend.
