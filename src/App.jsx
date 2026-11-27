@@ -24,9 +24,10 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import { PROGRAM_DAYS, SAMPLE_HOSTS, SAMPLE_STUDENTS } from './data.js'
+import { MEALS, SAMPLE_DATES, SAMPLE_HOSTS, SAMPLE_STUDENTS } from './data.js'
 import {
   buildStudentGroups,
+  formatDate,
   formatSlot,
   getHostOverlap,
   getScheduleHealth,
@@ -45,24 +46,39 @@ function overlapsForGroup(host, group) {
   return intersectSlots(host.availability, group.availability)
 }
 
-function HostAvailability({ host, assignedGroups }) {
+function HostAvailability({ host, assignedGroups, programDates }) {
   const highlighted = new Set(assignedGroups.length ? getHostOverlap(host, assignedGroups) : host.availability)
+  const dateRange = programDates.length
+    ? `from ${formatDate(programDates[0], 'long')} to ${formatDate(programDates[programDates.length - 1], 'long')}`
+    : 'for the event'
   return (
     <div className="availability-wrap">
       <div className="availability-label">
-        <span><CalendarDays size={13} /> DECEMBER AVAILABILITY</span>
+        <span><CalendarDays size={13} /> EVENT AVAILABILITY</span>
         <div className="grid-legend"><i /> Available <b>·</b> Unavailable</div>
       </div>
-      <div className="calendar-grid" role="grid" aria-label={`${host.name} December 13 to 27 availability`}>
+      <div
+        className="calendar-grid"
+        style={{ gridTemplateColumns: programDates.length ? `19px repeat(${programDates.length}, minmax(0, 1fr))` : '19px' }}
+        role="grid"
+        aria-label={`${host.name} availability ${dateRange}`}
+      >
         <div className="meal-labels"><span /><span>L</span><span>D</span></div>
-        {PROGRAM_DAYS.map(({ day, weekday }) => (
-          <div className="calendar-day" key={day}>
-            <span className="day-number">{day}</span>
-            <span className={`slot-dot ${host.availability.includes(`${day}-Lunch`) ? 'is-available' : ''} ${highlighted.has(`${day}-Lunch`) ? 'is-highlighted' : ''}`} title={`Dec ${day} Lunch`} />
-            <span className={`slot-dot ${host.availability.includes(`${day}-Dinner`) ? 'is-available' : ''} ${highlighted.has(`${day}-Dinner`) ? 'is-highlighted' : ''}`} title={`Dec ${day} Dinner`} />
-            <span className="sr-only">{weekday}</span>
-          </div>
-        ))}
+        {programDates.map((date, index) => {
+          const [, day] = date.split('-').map(Number)
+          const monthChanged = index === 0 || programDates[index - 1].split('-')[0] !== date.split('-')[0]
+          const monthLabel = monthChanged ? `${formatDate(date).split(' ')[0]} ` : ''
+          const lunchSlot = `${date}-${MEALS[0]}`
+          const dinnerSlot = `${date}-${MEALS[1]}`
+          return (
+            <div className="calendar-day" key={date}>
+              <span className="day-number" title={formatDate(date, 'long')}>{monthLabel}{day}</span>
+              <span className={`slot-dot ${host.availability.includes(lunchSlot) ? 'is-available' : ''} ${highlighted.has(lunchSlot) ? 'is-highlighted' : ''}`} title={`${formatDate(date, 'long')} ${MEALS[0]}`} />
+              <span className={`slot-dot ${host.availability.includes(dinnerSlot) ? 'is-available' : ''} ${highlighted.has(dinnerSlot) ? 'is-highlighted' : ''}`} title={`${formatDate(date, 'long')} ${MEALS[1]}`} />
+              <span className="sr-only">{formatDate(date, 'long')}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -94,12 +110,56 @@ function InfoTile({ icon: Icon, label, value, className = '' }) {
   )
 }
 
+function AvailabilityPicker({ label, selectedSlots, onChange, programDates }) {
+  const toggleSlot = (slot) => {
+    onChange(selectedSlots.includes(slot)
+      ? selectedSlots.filter((selected) => selected !== slot)
+      : [...selectedSlots, slot])
+  }
+  const summary = selectedSlots.length
+    ? `${selectedSlots.length} meal ${selectedSlots.length === 1 ? 'time' : 'times'}`
+    : 'Any meal time'
+
+  return (
+    <details className="availability-picker">
+      <summary aria-label={label}>{summary}</summary>
+      <div className="availability-option-list" role="group" aria-label={label}>
+        {programDates.flatMap((date) => MEALS.map((meal) => {
+          const slot = `${date}-${meal}`
+          return (
+            <label className="availability-option" key={slot}>
+              <input type="checkbox" checked={selectedSlots.includes(slot)} onChange={() => toggleSlot(slot)} />
+              <span>{formatSlot(slot)}</span>
+            </label>
+          )
+        }))}
+      </div>
+    </details>
+  )
+}
+
+function formatProgramRange(dates) {
+  if (!dates.length) return 'Dates detected from your form'
+  const first = dates[0]
+  const last = dates[dates.length - 1]
+  if (first === last) return formatDate(first, 'long')
+  if (first.split('-')[0] === last.split('-')[0]) {
+    return `${formatDate(first, 'long')} — ${Number(last.split('-')[1])}`
+  }
+  return `${formatDate(first, 'long')} — ${formatDate(last, 'long')}`
+}
+
 function App() {
   const [hosts, setHosts] = useState(SAMPLE_HOSTS)
   const [students, setStudents] = useState(SAMPLE_STUDENTS)
+  const [programDates, setProgramDates] = useState(SAMPLE_DATES)
   const [assignments, setAssignments] = useState({})
   const [query, setQuery] = useState('')
   const [hostQuery, setHostQuery] = useState('')
+  const [groupAvailabilityFilter, setGroupAvailabilityFilter] = useState([])
+  const [hostAvailabilityFilter, setHostAvailabilityFilter] = useState([])
+  const [groupSort, setGroupSort] = useState('default')
+  const [hostSort, setHostSort] = useState('default')
   const [toast, setToast] = useState(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [sheetUrl, setSheetUrl] = useState('')
@@ -132,13 +192,26 @@ function App() {
 
   const visibleGroups = useMemo(() => {
     const search = query.trim().toLocaleLowerCase()
-    return groups.filter((group) => !search || group.members.some((member) =>
-      [member.name, member.university, member.country, member.religion].join(' ').toLocaleLowerCase().includes(search),
-    ))
-  }, [groups, query])
-  const visibleHosts = useMemo(() => hosts.filter((host) =>
-    !hostQuery.trim() || [host.name, host.district, host.venue].join(' ').toLocaleLowerCase().includes(hostQuery.trim().toLocaleLowerCase()),
-  ), [hosts, hostQuery])
+    const filtered = groups.filter((group) =>
+      (!groupAvailabilityFilter.length || groupAvailabilityFilter.some((slot) => group.availability.includes(slot))) &&
+      (!search || group.members.some((member) =>
+        [member.name, member.university, member.country, member.religion].join(' ').toLocaleLowerCase().includes(search),
+      )),
+    )
+    if (groupSort === 'most') return filtered.sort((left, right) => right.availability.length - left.availability.length)
+    if (groupSort === 'fewest') return filtered.sort((left, right) => left.availability.length - right.availability.length)
+    return filtered
+  }, [groups, query, groupAvailabilityFilter, groupSort])
+  const visibleHosts = useMemo(() => {
+    const search = hostQuery.trim().toLocaleLowerCase()
+    const filtered = hosts.filter((host) =>
+      (!hostAvailabilityFilter.length || hostAvailabilityFilter.some((slot) => host.availability.includes(slot))) &&
+      (!search || [host.name, host.district, host.venue].join(' ').toLocaleLowerCase().includes(search)),
+    )
+    if (hostSort === 'most') return filtered.sort((left, right) => right.availability.length - left.availability.length)
+    if (hostSort === 'fewest') return filtered.sort((left, right) => left.availability.length - right.availability.length)
+    return filtered
+  }, [hosts, hostQuery, hostAvailabilityFilter, hostSort])
 
   function showToast(message, type = 'success') {
     setToast({ message, type })
@@ -175,7 +248,7 @@ function App() {
     event.target.value = ''
     if (!file) return
     try {
-      const records = parseCsv(await file.text(), kind)
+      const { records, dates } = parseCsv(await file.text(), kind)
       if (kind === 'hosts') {
         setHosts(records)
         setAssignments({})
@@ -183,6 +256,9 @@ function App() {
         setStudents(records)
         setAssignments({})
       }
+      setProgramDates(dates)
+      setHostAvailabilityFilter([])
+      setGroupAvailabilityFilter([])
       showToast(`Loaded ${records.length} ${kind === 'hosts' ? 'host families' : 'students'} from ${file.name}.`)
     } catch (error) {
       showToast(error.message || 'Could not read that CSV file.', 'error')
@@ -221,13 +297,16 @@ function App() {
           window.clearTimeout(timeout)
         }
       }))
-      const records = Object.fromEntries(loaded)
-      setHosts(records.hosts)
-      setStudents(records.students)
+      const data = Object.fromEntries(loaded)
+      setHosts(data.hosts.records)
+      setStudents(data.students.records)
+      setProgramDates([...new Set([...data.hosts.dates, ...data.students.dates])])
+      setHostAvailabilityFilter([])
+      setGroupAvailabilityFilter([])
       setAssignments({})
       try {
         window.localStorage.setItem('gatherwell.sheetUrl', enteredUrl)
-        showToast(`Loaded ${records.hosts.length} hosts and ${records.students.length} students from Google Sheets.`)
+        showToast(`Loaded ${data.hosts.records.length} hosts and ${data.students.records.length} students from Google Sheets.`)
       } catch {
         showToast('Sheet data loaded, but browser storage is unavailable so the URL could not be remembered.', 'error')
       }
@@ -312,7 +391,7 @@ function App() {
           </div>
           <div className="program-card">
             <div className="program-icon"><CalendarDays size={19} /></div>
-            <div><span className="program-label">PROGRAM DATES</span><strong>December 13 — 27</strong><span className="program-sub">Lunch &amp; dinner · 15 days</span></div>
+            <div><span className="program-label">PROGRAM DATES</span><strong>{formatProgramRange(programDates)}</strong><span className="program-sub">Lunch &amp; dinner · {programDates.length} {programDates.length === 1 ? 'day' : 'days'}</span></div>
             <span className="program-live"><i /> MATCHING OPEN</span>
           </div>
         </section>
@@ -338,8 +417,21 @@ function App() {
         <section className="matching-workspace">
           <div className="pane host-pane">
             <div className="pane-header">
-              <div className="pane-title"><span className="pane-icon host-pane-icon"><Home size={17} /></span><div><h3>Host families</h3><span>{hosts.length} {hosts.length === 1 ? 'welcoming table' : 'welcoming tables'}</span></div></div>
-              <label className="search-field host-search"><Search size={15} /><input value={hostQuery} onChange={(event) => setHostQuery(event.target.value)} placeholder="Find a host" aria-label="Search hosts" /></label>
+              <div className="pane-header-top">
+                <div className="pane-title"><span className="pane-icon host-pane-icon"><Home size={17} /></span><div><h3>Host families</h3><span>{hosts.length} {hosts.length === 1 ? 'welcoming table' : 'welcoming tables'}</span></div></div>
+                <label className="search-field host-search"><Search size={15} /><input value={hostQuery} onChange={(event) => setHostQuery(event.target.value)} placeholder="Find a host" aria-label="Search hosts" /></label>
+              </div>
+              <div className="availability-controls">
+                <AvailabilityPicker label="Filter hosts by available meal" selectedSlots={hostAvailabilityFilter} onChange={setHostAvailabilityFilter} programDates={programDates} />
+                <label className="availability-select-label">
+                  <span className="sr-only">Sort hosts by availability</span>
+                  <select value={hostSort} onChange={(event) => setHostSort(event.target.value)}>
+                    <option value="default">Default order</option>
+                    <option value="most">Most available</option>
+                    <option value="fewest">Fewest available</option>
+                  </select>
+                </label>
+              </div>
             </div>
             <div className="pane-scroll host-scroll">
               {visibleHosts.map((host) => {
@@ -383,7 +475,7 @@ function App() {
                         {overlap.length > 0 && <div className="overlap-preview"><Clock3 size={12} /> Shared: {overlap.slice(0, 4).map(formatSlot).join(' · ')}{overlap.length > 4 ? ` +${overlap.length - 4} more` : ''}</div>}
                       </div>
                     )}
-                    <HostAvailability host={host} assignedGroups={hostGroups} />
+                    <HostAvailability host={host} assignedGroups={hostGroups} programDates={programDates} />
                     {hostGroups.length === 0 && <div className="drop-hint"><Plus size={13} /> Drop a student group here to match</div>}
                   </article>
                 )
@@ -394,8 +486,21 @@ function App() {
 
           <div className="pane student-pane">
             <div className="pane-header student-pane-header">
-              <div className="pane-title"><span className="pane-icon student-pane-icon"><Users size={17} /></span><div><h3>Student groups</h3><span>{groups.length} {groups.length === 1 ? 'group' : 'groups'} · {students.length} {students.length === 1 ? 'student' : 'students'}</span></div></div>
-              <label className="search-field"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students" aria-label="Search student groups" /></label>
+              <div className="pane-header-top">
+                <div className="pane-title"><span className="pane-icon student-pane-icon"><Users size={17} /></span><div><h3>Student groups</h3><span>{groups.length} {groups.length === 1 ? 'group' : 'groups'} · {students.length} {students.length === 1 ? 'student' : 'students'}</span></div></div>
+                <label className="search-field"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students" aria-label="Search student groups" /></label>
+              </div>
+              <div className="availability-controls">
+                <AvailabilityPicker label="Filter student groups by jointly available meal" selectedSlots={groupAvailabilityFilter} onChange={setGroupAvailabilityFilter} programDates={programDates} />
+                <label className="availability-select-label">
+                  <span className="sr-only">Sort student groups by joint availability</span>
+                  <select value={groupSort} onChange={(event) => setGroupSort(event.target.value)}>
+                    <option value="default">Default order</option>
+                    <option value="most">Most available</option>
+                    <option value="fewest">Fewest available</option>
+                  </select>
+                </label>
+              </div>
             </div>
             <div className="pane-scroll student-scroll">
               {visibleGroups.map((group) => {
@@ -453,7 +558,7 @@ function App() {
             </div>
           </div>
         </section>
-        <footer className="page-footer"><span>Made for meaningful moments <Heart size={12} fill="currentColor" /></span><span>GATHERWELL · CHRISTMAS 2026</span></footer>
+        <footer className="page-footer"><span>Made for meaningful moments <Heart size={12} fill="currentColor" /></span><span>GATHERWELL · DINNER MATCHING</span></footer>
       </main>
 
       {exportOpen && (

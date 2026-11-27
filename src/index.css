@@ -79,7 +79,8 @@ h1 { margin: 8px 0 5px; font: 500 36px/1.2 'Manrope', sans-serif; letter-spacing
 .matching-note { padding: 7px 10px; color: #67806d; background: #eef4ed; border-radius: 20px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
 .matching-workspace { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); align-items: stretch; gap: 15px; height: min(660px, calc(100vh - 262px)); min-height: 430px; }
 .pane { min-width: 0; overflow: hidden; border: 1px solid #e8e7e0; border-radius: 10px; background: #fff; box-shadow: 0 2px 12px #253c3007; display: flex; flex-direction: column; }
-.pane-header { min-height: 61px; padding: 0 15px; border-bottom: 1px solid #eeede8; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.pane-header { min-height: 100px; padding: 10px 15px; border-bottom: 1px solid #eeede8; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 8px; }
+.pane-header-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .pane-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .pane-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; }
 .host-pane-icon { color: #46775b; background: #eef5ef; }
@@ -90,6 +91,18 @@ h1 { margin: 8px 0 5px; font: 500 36px/1.2 'Manrope', sans-serif; letter-spacing
 .search-field:focus-within { border-color: #b9cbbd; }
 .search-field input { border: 0; outline: 0; width: 100%; min-width: 0; color: #39443c; background: transparent; font-size: 12px; }
 .search-field input::placeholder { color: #a4a8a2; }
+.availability-controls { display: flex; align-items: flex-start; gap: 7px; }
+.availability-select-label { min-width: 0; flex: 1; }
+.availability-select-label select { width: 100%; height: 28px; padding: 0 7px; color: #687368; background: #fafaf8; border: 1px solid #edede8; border-radius: 6px; font: inherit; font-size: 10px; }
+.availability-select-label select:focus { outline: 1px solid #b9cbbd; border-color: #b9cbbd; }
+.availability-picker { min-width: 0; flex: 1; }
+.availability-picker summary { min-height: 28px; padding: 0 8px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: #687368; background: #fafaf8; border: 1px solid #edede8; border-radius: 6px; font-size: 10px; cursor: pointer; list-style: none; }
+.availability-picker summary::-webkit-details-marker { display: none; }
+.availability-picker summary::after { width: 5px; height: 5px; flex: none; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; content: ''; transform: rotate(45deg) translateY(-2px); }
+.availability-picker[open] summary { border-color: #b9cbbd; }
+.availability-option-list { max-height: 120px; margin-top: 4px; padding: 5px 7px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; background: #fff; border: 1px solid #edede8; border-radius: 6px; }
+.availability-option { display: flex; align-items: center; gap: 5px; color: #687368; font-size: 10px; white-space: nowrap; cursor: pointer; }
+.availability-option input { width: 12px; height: 12px; margin: 0; accent-color: #4d8060; }
 .pane-scroll { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #d9ddd5 transparent; }
 .host-scroll { padding: 11px; background: #fcfcfa; }
 .student-scroll { padding: 11px; background: #fcfcfa; }
@@ -259,7 +272,7 @@ h1 { margin: 8px 0 5px; font: 500 36px/1.2 'Manrope', sans-serif; letter-spacing
   .summary-bar { gap: 11px; padding: 0 10px; }
   .upload-button { padding: 7px; font-size: 11px; }
   .search-field { width: 120px; }
-  .pane-header { padding: 0 10px; }
+  .pane-header { padding: 10px; }
   .host-scroll, .student-scroll { padding: 8px; }
 }
 @media (max-width: 760px) {

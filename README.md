@@ -28,11 +28,11 @@ Set the sheet's general access to **Anyone with the link can view**. Both tabs m
 
 ### Expected sheet columns
 
-Hosts: `Name`, `Phone no.`, `Email Address`, `How many students would you like to host?`, the host venue and area questions, date availability columns from `13 Dec` through `27 Dec`, the Mandarin-hosting preference question, and the organizer remarks question.
+Hosts: `Name`, `Phone no.`, `Email Address`, `How many students would you like to host?`, the host venue and area questions, one availability column per event date, the Mandarin-hosting preference question, and the organizer remarks question.
 
-Students: `First Name`, `Last Name`, `Home Country`, `Gender`, `Whatsapp number`, `University`, the faith and dietary questions, date availability columns from `Dec 13` through `Dec 27`, the student grouping question, and the Mandarin-host preference question.
+Students: `First Name`, `Last Name`, `Home Country`, `Gender`, `Whatsapp number`, `University`, the faith and dietary questions, one availability column per event date, the student grouping question, and the Mandarin-host preference question.
 
-Header matching ignores capitalization and punctuation, recognizes common synonyms, and can match key terms inside longer form questions so wording does not need to be an exact copy. Daily date columns can include a longer question around a bracketed date, such as `[13 Dec]` or `[Dec 13]`. Availability cells can contain `Lunch`, `Dinner`, or both. `Yes`, `Available`, and `Both` are treated as both meals; empty or negative values are unavailable. Friend requests can contain partial names and are matched in either name order.
+Header matching ignores capitalization and punctuation, recognizes common synonyms, and can match key terms inside longer form questions so wording does not need to be an exact copy. Availability dates are detected from the date columns, so the event can use a different month or date range without changing the app code. Supported date labels include `13 Dec`, `Dec 13`, and ISO dates such as `2027-08-13`; a longer question can wrap the date in text such as `[13 Dec]`. The year is ignored when matching meal slots. Availability cells can contain `Lunch`, `Dinner`, or both. `Yes`, `Available`, and `Both` are treated as both meals; empty or negative values are unavailable. Friend requests can contain partial names and are matched in either name order.
 
 If you prefer local files, use **Upload hosts CSV** or **Upload students CSV**. CSV parsing supports quoted commas and newlines. The CSV headers can use the sheet field names above, or these common aliases:
 
@@ -48,7 +48,7 @@ If you prefer local files, use **Upload hosts CSV** or **Upload students CSV**. 
 | Mandarin preference | Yes or No |
 | Remarks | Placeholder host |
 | Capacity | 4 |
-| 13 Dec through 27 Dec | Lunch, Dinner, Both, or blank |
+| One column per event date | Lunch, Dinner, Both, or blank |
 
 ### Students
 
@@ -63,7 +63,7 @@ If you prefer local files, use **Upload hosts CSV** or **Upload students CSV**. 
 | WhatsApp | (loaded from your sheet) |
 | Dietary restrictions | Not provided |
 | Specific students to be grouped with | Student 2 |
-| Dec 13 through Dec 27 | Lunch, Dinner, Both, or blank |
+| One column per event date | Lunch, Dinner, Both, or blank |
 
 Separate multiple values with semicolons. Loading a sheet replaces both datasets; each CSV upload replaces its corresponding dataset. Replacing data clears current assignments.
 

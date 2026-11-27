@@ -1,8 +1,13 @@
 import Papa from 'papaparse'
-import { MEALS, PROGRAM_DAYS } from './data.js'
+import { MEALS } from './data.js'
 
 const clean = (value) => String(value ?? '').trim()
 const key = (value) => clean(value).toLocaleLowerCase().replace(/[^a-z0-9]/g, '')
+const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const monthNumber = (value) => {
+  const month = clean(value).toLocaleLowerCase().replace(/\.$/, '')
+  return monthNames.findIndex((name) => name.toLocaleLowerCase() === month || name.slice(0, 3).toLocaleLowerCase() === month || (month === 'sept' && name === 'September')) + 1
+}
 const asList = (value) => Array.isArray(value)
   ? value.map(clean).filter(Boolean)
   : clean(value).split(/[;,|]/).map(clean).filter(Boolean)
@@ -11,18 +16,20 @@ export function intersectSlots(...collections) {
   if (!collections.length) return []
   const [first, ...rest] = collections
   const otherSets = rest.map((values) => new Set(values))
-  return [...new Set(first)].filter((slot) => otherSets.every((set) => set.has(slot))).sort(compareSlots)
+  return [...new Set(first)].filter((slot) => otherSets.every((set) => set.has(slot)))
 }
 
-export function compareSlots(left, right) {
-  const [leftDay, leftMeal] = left.split('-')
-  const [rightDay, rightMeal] = right.split('-')
-  return Number(leftDay) - Number(rightDay) || MEALS.indexOf(leftMeal) - MEALS.indexOf(rightMeal)
+export function formatDate(date, month = 'short') {
+  const [monthNumberValue, day] = date.split('-').map(Number)
+  return new Intl.DateTimeFormat('en-US', { month, day: 'numeric', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(2024, monthNumberValue - 1, day)))
 }
 
 export function formatSlot(slot) {
-  const [day, meal] = slot.split('-')
-  return `Dec ${day} · ${meal}`
+  const separator = slot.lastIndexOf('-')
+  const date = slot.slice(0, separator)
+  const meal = slot.slice(separator + 1)
+  return `${formatDate(date)} · ${meal}`
 }
 
 function normalizeName(name) {
@@ -97,34 +104,61 @@ export function getScheduleHealth(overlapCount) {
 
 function normalizeAvailability(value) {
   return asList(value).flatMap((entry) => {
-    const day = dateHeaderDay(entry)
-    return day ? slotsForDay(day, entry) : []
+    const date = dateHeader(entry)
+    return date ? slotsForDate(date, entry) : []
   })
 }
 
-function dateHeaderDay(value) {
-  const match = clean(value).match(/(?:dec(?:ember)?\s*(\d{1,2})|(\d{1,2})\s*dec(?:ember)?)/i)
-  const day = Number(match?.[1] ?? match?.[2])
-  return PROGRAM_DAYS.some((item) => item.day === day) ? day : null
+function dateKey(month, day) {
+  const date = new Date(Date.UTC(2024, month - 1, day))
+  if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
+  return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function slotsForDay(day, value) {
+function dateHeader(value) {
+  const text = clean(value)
+  const isoDate = text.match(/\b\d{4}[-/.](\d{1,2})[-/.](\d{1,2})\b/)
+  if (isoDate) return dateKey(Number(isoDate[1]), Number(isoDate[2]))
+
+  const monthFirst = text.match(/\b([A-Za-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(?:19|20)\d{2})?\b/i)
+  if (monthFirst) {
+    const month = monthNumber(monthFirst[1])
+    if (month) return dateKey(month, Number(monthFirst[2]))
+  }
+
+  const dayFirst = text.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\.?(?:,?\s+(?:19|20)\d{2})?\b/i)
+  if (dayFirst) {
+    const month = monthNumber(dayFirst[2])
+    if (month) return dateKey(month, Number(dayFirst[1]))
+  }
+
+  const numericDate = text.match(/\b(\d{1,2})[-/.](\d{1,2})(?:[-/.](?:19|20)?\d{2})?\b/)
+  if (numericDate) {
+    let month = Number(numericDate[1])
+    let day = Number(numericDate[2])
+    if (month > 12) [month, day] = [day, month]
+    return dateKey(month, day)
+  }
+  return null
+}
+
+function slotsForDate(date, value) {
   const text = clean(value).toLocaleLowerCase()
   if (!text || /\b(no|not|unavailable|false|none|n\/a)\b/.test(text)) return []
   const lunch = /\blunch(?:time)?\b/.test(text) || /^l$/.test(text)
   const dinner = /\bdinner\b/.test(text) || /^d$/.test(text)
   const both = /\b(yes|y|true|1|available|both|all day|all meals)\b/.test(text)
   return [
-    ...(lunch || both ? [`${day}-Lunch`] : []),
-    ...(dinner || both ? [`${day}-Dinner`] : []),
+    ...(lunch || both ? [`${date}-${MEALS[0]}`] : []),
+    ...(dinner || both ? [`${date}-${MEALS[1]}`] : []),
   ]
 }
 
 function availabilityFromRow(row) {
   const listedSlots = normalizeAvailability(rowValue(row, ['availability', 'available slots', 'slots']))
   const datedSlots = Object.entries(row).flatMap(([header, value]) => {
-    const day = dateHeaderDay(header)
-    return day ? slotsForDay(day, value) : []
+    const date = dateHeader(header)
+    return date ? slotsForDate(date, value) : []
   })
   return [...new Set([...listedSlots, ...datedSlots])]
 }
@@ -218,7 +252,13 @@ export function parseCsv(text, kind) {
   const convert = kind === 'hosts' ? toHost : toStudent
   const records = parsed.data.map(convert).filter((record) => record.name)
   if (!records.length) throw new Error(`No ${kind === 'hosts' ? 'host' : 'student'} rows found. Check the CSV headers and data.`)
-  return records
+  const headerDates = (parsed.meta.fields ?? []).map(dateHeader).filter(Boolean)
+  const dates = [...new Set([
+    ...headerDates,
+    ...records.flatMap((record) => record.availability.map((slot) => slot.slice(0, slot.lastIndexOf('-')))),
+  ])]
+  if (!dates.length) throw new Error('No event dates found. Add date columns such as “Aug 13” or “2027-08-13”.')
+  return { records, dates }
 }
 
 export function serializeCsv(hosts, assignments, groups) {
