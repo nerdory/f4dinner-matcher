@@ -18,7 +18,20 @@ Create a production build with `npm run build`, or preview that build with `npm 
 
 ## Form templates
 
-The Google Drive folder containing the form templates is available [here](https://drive.google.com/drive/folders/1AMQlNopMFhh1NNWuiwnHTpLKGHQBohI1?usp=sharing). For the app to load responses, the connected spreadsheet should include tabs named `Family - Responses` and `Students - Responses`.
+The shared [Google Drive folder of form templates](https://drive.google.com/drive/folders/1AMQlNopMFhh1NNWuiwnHTpLKGHQBohI1?usp=sharing) contains:
+
+- **Copy of 2026 F4XMAS Family Sign Up**
+- **Copy of 2026 F4XMAS Student Sign Up**
+
+### Replicate the setup for your event
+
+1. Make your own copies of both forms from the template folder. Update the event name, dates, and any event-specific wording.
+2. Collect both forms' responses in one Google spreadsheet. If the forms create separate response spreadsheets, copy the response data into one spreadsheet while keeping each form's header row.
+3. Name the spreadsheet tabs exactly `Family - Responses` and `Students - Responses`. The app uses these names to find the host and student data.
+4. In the spreadsheet's sharing settings, set general access to **Anyone with the link — Viewer**.
+5. Run the app locally or open its deployed site, paste the spreadsheet URL into **Load from Google Sheet URL**, and select **Load Sheet**. Confirm that both host and student records appear before making assignments.
+
+The app reads the two tabs directly from the browser; it does not upload the spreadsheet to an app backend. However, **Anyone with the link — Viewer** makes all data in that spreadsheet accessible to anyone who has its link. Do not use this setup for sensitive responses unless that access level is appropriate and participants have been informed.
 
 ## Load data
 
